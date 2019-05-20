@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<head>
+	<meta charset="utf-8">
+	<title>Madagascar main roads steepness</title>
+	<style>
+
+    body, text {
+      font-family: Maiandra GD, Proxima Nova Alt;
+    }
+
+    h1 {
+      margin: 0;
+      color: silver;
+      text-transform: uppercase;
+      font-size: 22px;
+      text-align: center;
+    }
+
+    #maincontainer {
+      margin: auto;
+      background-color: #464646;
+    }
+
+    #titlediv {
+      padding: 20px;
+      background-color: #2D2E37;
+    }
+
+    #subdiv {
+      display: block;
+      margin: auto;
+      width: 360px;
+      padding-top: 20px;
+      color: silver;
+      opacity: 0.8;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .svgdiv {
+      display: flex;
+      margin-top: 1px; 
+    }
+
+    .axis {
+      color: silver;
+      opacity: 0.8;
+      font-size: 12px;
+    }
+
+    .axis2 {
+      color: #CCABAB;
+      opacity: 0.8;
+      font-size: 12px;
+    }
+
+    .zarea {
+      fill-opacity: 0.2;
+    }
+
+    .zline {
+      stroke-opacity: 0.8;
+    }
+
+    .axistitle {
+      text-anchor: middle;
+      fill: silver;
+      opacity: 0.8;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .axis2title {
+      text-anchor: middle;
+      fill: #CCABAB;
+      opacity: 0.8;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .placesline {
+      stroke: silver;
+      stroke-opacity: 0.4;
+    }
+
+    .placesname {
+      fill: silver;
+      font-size: 12px;
+    }
+
+    .graphtitle {
+      fill: silver;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+  </style>
+</head>
+
+<body>
+  <div id="maincontainer">
+    <div id="titlediv"><h1>Slope and elevation along primary roads of Madagascar</h1><div id="subdiv">
+    <p>Elevation data from SRTM DEMs with 30 m spatial resolution.<br/>Road data &copy; OpenStreetMap Contributors.</p><p>Distances in these graphs are shorter than real road distances because the roads were resampled at 1 km distant nodes.</p>
+    <p>Author: @privatemajory</p>
+    </div></div>
+  </div>
+  <script src="d3.min.js"></script>
+  <script src="distances.js"></script>
+  <script>
+
+    var mainblock = d3.select("#maincontainer");
+
+    var width = 1200;
+    var height = 300;
+    var margin = { top: 80, right: 130, bottom: 80, left: 100 };
+    var axisoffset = 10;
+
+    mainblock.attr("style", "width:" + width + "px");
+
+    var hscale = d3.scaleLinear().range([ margin.left, width - margin.right ]);
+    var v1scale = d3.scaleLinear().range([ height - margin.bottom, margin.top ]);
+    var v2scale = d3.scaleLinear().range([ height - margin.bottom, margin.top ]);
+
+    var n2 = d3.csv("data/profile_n2.csv");
+    var n7 = d3.csv("data/profile_n7.csv");
+    var n4 = d3.csv("data/profile_n4.csv");
+    var n6 = d3.csv("data/profile_n6.csv");
+
+
+    n2.then(function(data) {
+
+      var canv = mainblock.append("div")
+        .attr("class", "svgdiv")
+        .append("svg")
+          .attr("width", width)
+          .attr("height", height)
+          .attr("id", "n2")
+          .style("background-color", "#2D2E37");
+
+      var distancemap = data.map(function(d) { return +d.cds2d });
+      var slopemap = data.map(function(d) { return +d.dirslop });
+      var zmap = data.map(function(d) { return +d.z });
+      var gradientscale = d3.scaleLinear().range([ 0, 100 ]);
+
+      hscale.domain([ d3.min(distancemap), d3.max(distancemap) ]);
+      v1scale.domain([ d3.min(slopemap), d3.max(slopemap) ]);
+      v2scale.domain([ d3.min(zmap), d3.max(zmap) ]);
+      gradientscale.domain([ d3.max(slopemap), d3.min(slopemap) ]);
+
+      var vgradient = canv.append("defs")
+                      .append("linearGradient")
+                        .attr("id","gradient1")
+                        .attr("x1", "0%")
+                        .attr("y1", "0%")
+                        .attr("x2", "0%")
+                        .attr("y2", "100%");
+
+      var gradientcolors = [
+
+        { 'offset': '0%', 'color': 'orangered', 'opacity': 1 },
+        { 'offset': function() { return +gradientscale(0) - 5 + '%' }, 'color': 'orange', 'opacity': 0.6 },
+        { 'offset': function() { return gradientscale(0) + '%' }, 'color': '#F0F0F0', 'opacity': 0.6 },
+        { 'offset': function() { return +gradientscale(0) + 5 + '%' }, 'color': 'lightblue', 'opacity': 0.6 },
+        { 'offset': '100%', 'color': 'royalblue', 'opacity': 1 }
+
+      ];
+
+      for (i in gradientcolors) {
+
+        vgradient.append("stop")
+          .attr("offset", gradientcolors[i].offset)
+          .attr("style", "stop-color:" + gradientcolors[i].color + ";stop-opacity:" + gradientcolors[i].opacity);
+
+      };
+
+      canv.append("path")
+          .datum(data)
+          .attr("d", d3.area()
+            .x(function(d) { return hscale(+d.cds2d) })
+            .y0(height - margin.bottom)
+            .y1(function(d) { return v2scale(+d.z) })
+            .curve(d3.curveCatmullRom.alpha(0.2)))
+          .attr("class", "zarea")
+          .attr("fill", "rosybrown")
+          .attr("stroke", "none");
+
+      canv.append("path")
+          .datum(data)
+          .attr("d", d3.line()
+            .x(function(d) { return hscale(+d.cds2d) })
+            .y(function(d) { return v2scale(+d.z) })
+            .curve(d3.curveCatmullRom.alpha(0.2)))
+          .attr("class", "zline")
+          .attr("fill", "none")
+          .attr("stroke", "#CCABAB")
+          .attr("stroke-width", "0.5");
+
+      canv.append("g")
+        .call(d3.axisRight(v2scale).tickFormat(function(d) { return d + ' m' }).tickSizeOuter(0))
+        .attr("class", "axis2")
+        .attr("transform", "translate(" + (width - margin.right + axisoffset) + ",0)");
+
+      canv.append("text")
+        .attr("class", "axis2title")
+        .attr("transform", "translate(" + (width - margin.right + axisoffset + 70) + "," + height/2 + ") rotate(90)")
+        .text("Elevation");
+
+      canv.append("path")
+          .datum(data)
+          .attr("d", d3.area()
+            .x(function(d) { return hscale(+d.cds2d) })
+            .y0(v1scale(0))
+            .y1(function(d) { return v1scale(+d.dirslop) })
+            .curve(d3.curveCatmullRom.alpha(0.2)))
+          .attr("stroke", "none")
+          .attr("fill", "url(#gradient1)");
+
+      canv.append("g")
+        .call(d3.axisLeft(v1scale).ticks(5).tickFormat(function(d) { return d + '°' }).tickSizeOuter(0))
+        .attr("class", "axis")
+        .attr("transform", "translate(" + (margin.left - axisoffset) + ",0)");
+
+      canv.append("rect")
+        .attr("x", margin.left - axisoffset)
+        .attr("y", margin.top)
+        .attr("width", 1)
+        .attr("height", height - margin.top - margin.bottom)
+        .attr("stroke", "none")
+        .attr("fill", "url(#gradient1)");
+
+      canv.append("text")
+        .attr("class", "axistitle")
+        .attr("transform", "translate(" + (margin.left - axisoffset - 40) + "," + height/2 + ") rotate(-90)")
+        .text("Directional slope");
+
+      canv.append("g")
+        .call(d3.axisBottom(hscale).tickFormat(function(d) { return d/1000 + ' km' }).tickSizeOuter(0))
+        .attr("class", "axis")
+        .attr("transform", "translate(0," + (height - margin.bottom + axisoffset) + ")");
+
+      canv.append("text")
+        .attr("class", "axistitle")
+        .attr("transform", "translate(" + width/2 + "," + (height - margin.bottom/2 + axisoffset) + ")")
+        .text("Distance");
+
+      canv.append("text")
+        .attr("class", "graphtitle")
+        .attr("transform", "translate(" + margin.left + "," + margin.top/2 + ")")
+        .text("RN 2 🏲 Antananarivo to Toamasina");
+
+      for (i in distancesN2) {
+
+        canv.append("line")
+          .attr("class", "placesline")
+          .attr("x1", hscale(distancesN2[i].dist))
+          .attr("y1", margin.top - 20)
+          .attr("x2", hscale(distancesN2[i].dist))
+          .attr("y2", height - margin.bottom);
+
+        canv.append("text")
+          .attr("class", "placesname")
+          .attr("x", hscale(distancesN2[i].dist))
+          .attr("y", margin.top - 10)
+          .attr("dx", 6)
+          .text(distancesN2[i].place);
+
+      };
+
+    });
+    
+
+    n7.then(function(data) {
+
+      var canv = mainblock.append("div")
+        .attr("class", "svgdiv")
+        .append("svg")
+          .attr("width", width)
+          .attr("height", height)
+          .attr("id", "n7")
+          .style("background-color", "#2D2E37");
+
+      var distancemap = data.map(function(d) { return +d.cds2d });
+      var slopemap = data.map(function(d) { return +d.dirslop });
+      var zmap = data.map(function(d) { return +d.z });
+      var gradientscale = d3.scaleLinear().range([ 0, 100 ]);
+
+      hscale.domain([ d3.min(distancemap), d3.max(distancemap) ]);
+      v1scale.domain([ d3.min(slopemap), d3.max(slopemap) ]);
+      v2scale.domain([ d3.min(zmap), d3.max(zmap) ]);
+      gradientscale.domain([ d3.max(slopemap), d3.min(slopemap) ]);
+
+      var vgradient = canv.append("defs")
+                      .append("linearGradient")
+                        .attr("id","gradient2")
+                        .attr("x1", "0%")
+                        .attr("y1", "0%")
+                        .attr("x2", "0%")
+                        .attr("y2", "100%");
+
+      var gradientcolors = [
+
+        { 'offset': '0%', 'color': 'orangered', 'opacity': 1 },
+        { 'offset': function() { return +gradientscale(0) - 5 + '%' }, 'color': 'orange', 'opacity': 0.6 },
+        { 'offset': function() { return gradientscale(0) + '%' }, 'color': '#F0F0F0', 'opacity': 0.6 },
+        { 'offset': function() { return +gradientscale(0) + 5 + '%' }, 'color': 'lightblue', 'opacity': 0.6 },
+        { 'offset': '100%', 'color': 'royalblue', 'opacity': 1 }
+
+      ];
+
+      for (i in gradientcolors) {
+
+        vgradient.append("stop")
+          .attr("offset", gradientcolors[i].offset)
+          .attr("style", "stop-color:" + gradientcolors[i].color + ";stop-opacity:" + gradientcolors[i].opacity);
+
+      };
+
+      canv.append("path")
+          .datum(data)
+          .attr("d", d3.area()
+            .x(function(d) { return hscale(+d.cds2d) })
+            .y0(height - margin.bottom)
+            .y1(function(d) { return v2scale(+d.z) })
+            .curve(d3.curveCatmullRom.alpha(0.2)))
+          .attr("class", "zarea")
+          .attr("fill", "rosybrown")
+          .attr("stroke", "none");
+
+      canv.append("path")
+          .datum(data)
+          .attr("d", d3.line()
+            .x(function(d) { return hscale(+d.cds2d) })
+            .y(function(d) { return v2scale(+d.z) })
+            .curve(d3.curveCatmullRom.alpha(0.2)))
+          .attr("class", "zline")
+          .attr("fill", "none")
+          .attr("stroke", "#CCABAB")
+          .attr("stroke-width", "0.5");
+
+      canv.append("g")
+        .call(d3.axisRight(v2scale).tickFormat(function(d) { return d + ' m' }).tickSizeOuter(0))
+        .attr("class", "axis2")
+        .attr("transform", "translate(" + (width - margin.right + axisoffset) + ",0)");
+
+      canv.append("text")
+        .attr("class", "axis2title")
+        .attr("transform", "translate(" + (width - margin.right + axisoffset + 70) + "," + height/2 + ") rotate(90)")
+        .text("Elevation");
+
+      canv.append("path")
+          .datum(data)
+          .attr("d", d3.area()
+            .x(function(d) { return hscale(+d.cds2d) })
+            .y0(v1scale(0))
+            .y1(function(d) { return v1scale(+d.dirslop) })
+            .curve(d3.curveCatmullRom.alpha(0.2)))
+          .attr("stroke", "none")
+          .attr("fill", "url(#gradient2)");
+
+      canv.append("g")
+        .call(d3.axisLeft(v1scale).ticks(5).tickFormat(function(d) { return d + '°' }).tickSizeOuter(0))
+        .attr("class", "axis")
+        .attr("transform", "translate(" + (margin.left - axisoffset) + ",0)");
+
+      canv.append("rect")
+        .attr("x", margin.left - axisoffset)
+        .attr("y", margin.top)
+        .attr("width", 1)
+        .attr("height", height - margin.top - margin.bottom)
+        .attr("stroke", "none")
+        .attr("fill", "url(#gradient2)");
+
+      canv.append("text")
+        .attr("class", "axistitle")
+        .attr("transform", "translate(" + (margin.left - axisoffset - 40) + "," + height/2 + ") rotate(-90)")
+        .text("Directional slope");
+
+      canv.append("g")
+        .call(d3.axisBottom(hscale).tickFormat(function(d) { return d/1000 + ' km' }).tickSizeOuter(0))
+        .attr("class", "axis")
+        .attr("transform", "translate(0," + (height - margin.bottom + axisoffset) + ")");
+
+      canv.append("text")
+        .attr("class", "axistitle")
+        .attr("transform", "translate(" + width/2 + "," + (height - margin.bottom/2 + axisoffset) + ")")
+        .text("Distance");
+
+      canv.append("text")
+        .attr("class", "graphtitle")
+        .attr("transform", "translate(" + margin.left + "," + margin.top/2 + ")")
+        .text("RN 7 🏲 Antananarivo to Toliara");
+
+      for (i in distancesN7) {
+
+        canv.append("line")
+          .attr("class", "placesline")
+          .attr("x1", hscale(distancesN7[i].dist))
+          .attr("y1", margin.top - 20)
+          .attr("x2", hscale(distancesN7[i].dist))
+          .attr("y2", height - margin.bottom);
+
+        canv.append("text")
+          .attr("class", "placesname")
+          .attr("x", hscale(distancesN7[i].dist))
+          .attr("y", margin.top - 10)
+          .attr("dx", 6)
+          .text(distancesN7[i].place);
+
+      };
+
+    })
+
+
+    n4.then(function(data) {
+
+      var canv = mainblock.append("div")
+        .attr("class", "svgdiv")
+        .append("svg")
+          .attr("width", width)
+          .attr("height", height)
+          .attr("id", "n4")
+          .style("background-color", "#2D2E37");
+
+      var distancemap = data.map(function(d) { return +d.cds2d });
+      var slopemap = data.map(function(d) { return +d.dirslop });
+      var zmap = data.map(function(d) { return +d.z });
+      var gradientscale = d3.scaleLinear().range([ 0, 100 ]);
+
+      hscale.domain([ d3.min(distancemap), d3.max(distancemap) ]);
+      v1scale.domain([ d3.min(slopemap), d3.max(slopemap) ]);
+      v2scale.domain([ d3.min(zmap), d3.max(zmap) ]);
+      gradientscale.domain([ d3.max(slopemap), d3.min(slopemap) ]);
+
+      var vgradient = canv.append("defs")
+                      .append("linearGradient")
+                        .attr("id","gradient3")
+                        .attr("x1", "0%")
+                        .attr("y1", "0%")
+                        .attr("x2", "0%")
+                        .attr("y2", "100%");
+
+      var gradientcolors = [
+
+        { 'offset': '0%', 'color': 'orangered', 'opacity': 1 },
+        { 'offset': function() { return +gradientscale(0) - 5 + '%' }, 'color': 'orange', 'opacity': 0.6 },
+        { 'offset': function() { return gradientscale(0) + '%' }, 'color': '#F0F0F0', 'opacity': 0.6 },
+        { 'offset': function() { return +gradientscale(0) + 5 + '%' }, 'color': 'lightblue', 'opacity': 0.6 },
+        { 'offset': '100%', 'color': 'royalblue', 'opacity': 1 }
+
+      ];
+
+      for (i in gradientcolors) {
+
+        vgradient.append("stop")
+          .attr("offset", gradientcolors[i].offset)
+          .attr("style", "stop-color:" + gradientcolors[i].color + ";stop-opacity:" + gradientcolors[i].opacity);
+
+      };
+
+      canv.append("path")
+          .datum(data)
+          .attr("d", d3.area()
+            .x(function(d) { return hscale(+d.cds2d) })
+            .y0(height - margin.bottom)
+            .y1(function(d) { return v2scale(+d.z) })
+            .curve(d3.curveCatmullRom.alpha(0.2)))
+          .attr("class", "zarea")
+          .attr("fill", "rosybrown")
+          .attr("stroke", "none");
+
+      canv.append("path")
+          .datum(data)
+          .attr("d", d3.line()
+            .x(function(d) { return hscale(+d.cds2d) })
+            .y(function(d) { return v2scale(+d.z) })
+            .curve(d3.curveCatmullRom.alpha(0.2)))
+          .attr("class", "zline")
+          .attr("fill", "none")
+          .attr("stroke", "#CCABAB")
+          .attr("stroke-width", "0.5");
+
+      canv.append("g")
+        .call(d3.axisRight(v2scale).tickFormat(function(d) { return d + ' m' }).tickSizeOuter(0))
+        .attr("class", "axis2")
+        .attr("transform", "translate(" + (width - margin.right + axisoffset) + ",0)");
+
+      canv.append("text")
+        .attr("class", "axis2title")
+        .attr("transform", "translate(" + (width - margin.right + axisoffset + 70) + "," + height/2 + ") rotate(90)")
+        .text("Elevation");
+
+      canv.append("path")
+          .datum(data)
+          .attr("d", d3.area()
+            .x(function(d) { return hscale(+d.cds2d) })
+            .y0(v1scale(0))
+            .y1(function(d) { return v1scale(+d.dirslop) })
+            .curve(d3.curveCatmullRom.alpha(0.2)))
+          .attr("stroke", "none")
+          .attr("fill", "url(#gradient3)");
+
+      canv.append("g")
+        .call(d3.axisLeft(v1scale).ticks(5).tickFormat(function(d) { return d + '°' }).tickSizeOuter(0))
+        .attr("class", "axis")
+        .attr("transform", "translate(" + (margin.left - axisoffset) + ",0)");
+
+      canv.append("rect")
+        .attr("x", margin.left - axisoffset)
+        .attr("y", margin.top)
+        .attr("width", 1)
+        .attr("height", height - margin.top - margin.bottom)
+        .attr("stroke", "none")
+        .attr("fill", "url(#gradient3)");
+
+      canv.append("text")
+        .attr("class", "axistitle")
+        .attr("transform", "translate(" + (margin.left - axisoffset - 40) + "," + height/2 + ") rotate(-90)")
+        .text("Directional slope");
+
+      canv.append("g")
+        .call(d3.axisBottom(hscale).tickFormat(function(d) { return d/1000 + ' km' }).tickSizeOuter(0))
+        .attr("class", "axis")
+        .attr("transform", "translate(0," + (height - margin.bottom + axisoffset) + ")");
+
+      canv.append("text")
+        .attr("class", "axistitle")
+        .attr("transform", "translate(" + width/2 + "," + (height - margin.bottom/2 + axisoffset) + ")")
+        .text("Distance");
+
+      canv.append("text")
+        .attr("class", "graphtitle")
+        .attr("transform", "translate(" + margin.left + "," + margin.top/2 + ")")
+        .text("RN 4 🏲 Antananarivo to Mahajanga");
+
+      for (i in distancesN4) {
+
+        canv.append("line")
+          .attr("class", "placesline")
+          .attr("x1", hscale(distancesN4[i].dist))
+          .attr("y1", margin.top - 20)
+          .attr("x2", hscale(distancesN4[i].dist))
+          .attr("y2", height - margin.bottom);
+
+        canv.append("text")
+          .attr("class", "placesname")
+          .attr("x", hscale(distancesN4[i].dist))
+          .attr("y", margin.top - 10)
+          .attr("dx", 6)
+          .text(distancesN4[i].place);
+
+      };
+
+    })
+
+
+    n6.then(function(data) {
+
+      var canv = mainblock.append("div")
+        .attr("class", "svgdiv")
+        .append("svg")
+          .attr("width", width)
+          .attr("height", height)
+          .attr("id", "n6")
+          .style("background-color", "#2D2E37");
+
+      var distancemap = data.map(function(d) { return +d.cds2d });
+      var slopemap = data.map(function(d) { return +d.dirslop });
+      var zmap = data.map(function(d) { return +d.z });
+      var gradientscale = d3.scaleLinear().range([ 0, 100 ]);
+
+      hscale.domain([ d3.min(distancemap), d3.max(distancemap) ]);
+      v1scale.domain([ d3.min(slopemap), d3.max(slopemap) ]);
+      v2scale.domain([ d3.min(zmap), d3.max(zmap) ]);
+      gradientscale.domain([ d3.max(slopemap), d3.min(slopemap) ]);
+
+      var vgradient = canv.append("defs")
+                      .append("linearGradient")
+                        .attr("id","gradient4")
+                        .attr("x1", "0%")
+                        .attr("y1", "0%")
+                        .attr("x2", "0%")
+                        .attr("y2", "100%");
+
+      var gradientcolors = [
+
+        { 'offset': '0%', 'color': 'orangered', 'opacity': 1 },
+        { 'offset': function() { return +gradientscale(0) - 5 + '%' }, 'color': 'orange', 'opacity': 0.6 },
+        { 'offset': function() { return gradientscale(0) + '%' }, 'color': '#F0F0F0', 'opacity': 0.6 },
+        { 'offset': function() { return +gradientscale(0) + 5 + '%' }, 'color': 'lightblue', 'opacity': 0.6 },
+        { 'offset': '100%', 'color': 'royalblue', 'opacity': 1 }
+
+      ];
+
+      for (i in gradientcolors) {
+
+        vgradient.append("stop")
+          .attr("offset", gradientcolors[i].offset)
+          .attr("style", "stop-color:" + gradientcolors[i].color + ";stop-opacity:" + gradientcolors[i].opacity);
+
+      };
+
+      canv.append("path")
+          .datum(data)
+          .attr("d", d3.area()
+            .x(function(d) { return hscale(+d.cds2d) })
+            .y0(height - margin.bottom)
+            .y1(function(d) { return v2scale(+d.z) })
+            .curve(d3.curveCatmullRom.alpha(0.2)))
+          .attr("class", "zarea")
+          .attr("fill", "rosybrown")
+          .attr("stroke", "none");
+
+      canv.append("path")
+          .datum(data)
+          .attr("d", d3.line()
+            .x(function(d) { return hscale(+d.cds2d) })
+            .y(function(d) { return v2scale(+d.z) })
+            .curve(d3.curveCatmullRom.alpha(0.2)))
+          .attr("class", "zline")
+          .attr("fill", "none")
+          .attr("stroke", "#CCABAB")
+          .attr("stroke-width", "0.5");
+
+      canv.append("g")
+        .call(d3.axisRight(v2scale).tickFormat(function(d) { return d + ' m' }).tickSizeOuter(0))
+        .attr("class", "axis2")
+        .attr("transform", "translate(" + (width - margin.right + axisoffset) + ",0)");
+
+      canv.append("text")
+        .attr("class", "axis2title")
+        .attr("transform", "translate(" + (width - margin.right + axisoffset + 70) + "," + height/2 + ") rotate(90)")
+        .text("Elevation");
+
+      canv.append("path")
+          .datum(data)
+          .attr("d", d3.area()
+            .x(function(d) { return hscale(+d.cds2d) })
+            .y0(v1scale(0))
+            .y1(function(d) { return v1scale(+d.dirslop) })
+            .curve(d3.curveCatmullRom.alpha(0.2)))
+          .attr("stroke", "none")
+          .attr("fill", "url(#gradient4)");
+
+      canv.append("g")
+        .call(d3.axisLeft(v1scale).ticks(5).tickFormat(function(d) { return d + '°' }).tickSizeOuter(0))
+        .attr("class", "axis")
+        .attr("transform", "translate(" + (margin.left - axisoffset) + ",0)");
+
+      canv.append("rect")
+        .attr("x", margin.left - axisoffset)
+        .attr("y", margin.top)
+        .attr("width", 1)
+        .attr("height", height - margin.top - margin.bottom)
+        .attr("stroke", "none")
+        .attr("fill", "url(#gradient4)");
+
+      canv.append("text")
+        .attr("class", "axistitle")
+        .attr("transform", "translate(" + (margin.left - axisoffset - 40) + "," + height/2 + ") rotate(-90)")
+        .text("Directional slope");
+
+      canv.append("g")
+        .call(d3.axisBottom(hscale).tickFormat(function(d) { return d/1000 + ' km' }).tickSizeOuter(0))
+        .attr("class", "axis")
+        .attr("transform", "translate(0," + (height - margin.bottom + axisoffset) + ")");
+
+      canv.append("text")
+        .attr("class", "axistitle")
+        .attr("transform", "translate(" + width/2 + "," + (height - margin.bottom/2 + axisoffset) + ")")
+        .text("Distance");
+
+      canv.append("text")
+        .attr("class", "graphtitle")
+        .attr("transform", "translate(" + margin.left + "," + margin.top/2 + ")")
+        .text("RN 6 🏲 Ambondromamy to Antsiranana");
+
+      for (i in distancesN6) {
+
+        canv.append("line")
+          .attr("class", "placesline")
+          .attr("x1", hscale(distancesN6[i].dist))
+          .attr("y1", margin.top - 20)
+          .attr("x2", hscale(distancesN6[i].dist))
+          .attr("y2", height - margin.bottom);
+
+        canv.append("text")
+          .attr("class", "placesname")
+          .attr("x", hscale(distancesN6[i].dist))
+          .attr("y", margin.top - 10)
+          .attr("dx", 6)
+          .text(distancesN6[i].place);
+
+      };
+
+    });
+
+  </script>
+</body>
+
